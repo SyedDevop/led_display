@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <hardware/gpio.h>
 #include <pico/assert.h>
 #include <pico/time.h>
@@ -85,6 +86,31 @@ static const DIGIT_FONT DIGIT_FONTS[10] = {
     {0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 0},
 };
 
+// #define DIGIT_FONT_WIDTH 3
+// #define DIGIT_FONT_HEIGHT 5
+// typedef bool DIGIT_FONT[DIGIT_FONT_WIDTH * DIGIT_FONT_HEIGHT];
+// static const DIGIT_FONT DIGIT_FONTS[10] = {
+//     // 0
+//     {1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1},
+//     // 1
+//     {0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0},
+//     // 2
+//     {1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1},
+//     // 3
+//     {1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1},
+//     // 4
+//     {1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1},
+//     // 5
+//     {1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1},
+//     // 6
+//     {1, 0, 0, 1, 0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1},
+//     // 7
+//     {1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0},
+//     // 8
+//     {1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1},
+//     // 9
+//     {1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1},
+// };
 #define LETTER_FONT_WIDTH 5
 #define LETTER_FONT_HEIGHT 5
 typedef bool LETTER_FONT[LETTER_FONT_WIDTH * LETTER_FONT_HEIGHT];
@@ -222,9 +248,9 @@ static inline void put_char_in_pixel_buff(char c, int base_x, int base_y,
                                           uint32_t color) {
   if (c >= '0' && c <= '9') {
     put_digit_in_pixel_buff(DIGIT_FONTS[c - '0'], base_x, base_y, color, None);
-  } else if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
-    put_letter_in_pixel_buff(LETTER_FONTS[c - 'A'], base_x, base_y, color,
-                             None);
+  } else if (isalpha(c)) {
+    int idx = toupper(c) - 'A';
+    put_letter_in_pixel_buff(LETTER_FONTS[idx], base_x, base_y, color, None);
   }
 }
 
