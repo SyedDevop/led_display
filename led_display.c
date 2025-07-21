@@ -145,31 +145,58 @@ static const LETTER_FONT LETTER_FONTS[26] = {
     {1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1},
 };
 
+enum Rotation { Ninety, None };
+
 static inline void put_digit_in_pixel_buff(const DIGIT_FONT font, int base_x,
-                                           int base_y, uint32_t color) {
+                                           int base_y, uint32_t color,
+                                           enum Rotation rotate_led) {
+  int pixel_index, x, y = 0;
+  // Row == y and col == x
+  //       v -> y
   for (int row = 0; row < DIGIT_FONT_HEIGHT; ++row) {
+    //       v -> x
     for (int col = 0; col < DIGIT_FONT_WIDTH; ++col) {
       int font_index = row * DIGIT_FONT_WIDTH + col;
-      if (font[font_index]) {
-        int pixel_index = (base_y + row) * GRID_WIDTH + (base_x + col);
-        if (pixel_index >= 0 && pixel_index < NUM_PIXEL) {
-          pixels[pixel_index] = color;
-        }
+      if (!font[font_index])
+        continue;
+      switch (rotate_led) {
+      case Ninety:
+        x = DIGIT_FONT_WIDTH - 1 - col;
+        y = DIGIT_FONT_HEIGHT - 1 - row;
+        pixel_index = (base_y + y) * GRID_WIDTH + (base_x + x);
+        break;
+      case None:
+        pixel_index = (base_y + row) * GRID_WIDTH + (base_x + col);
+        break;
+      }
+      if (pixel_index >= 0 && pixel_index < NUM_PIXEL) {
+        pixels[pixel_index] = color;
       }
     }
   }
 }
 
 static inline void put_letter_in_pixel_buff(const LETTER_FONT font, int base_x,
-                                            int base_y, uint32_t color) {
+                                            int base_y, uint32_t color,
+                                            enum Rotation rotate_led) {
   for (int row = 0; row < LETTER_FONT_HEIGHT; ++row) {
     for (int col = 0; col < LETTER_FONT_WIDTH; ++col) {
       int font_index = row * LETTER_FONT_WIDTH + col;
-      if (font[font_index]) {
-        int pixel_index = (base_y + row) * GRID_WIDTH + (base_x + col);
-        if (pixel_index >= 0 && pixel_index < NUM_PIXEL) {
-          pixels[pixel_index] = color;
-        }
+      if (!font[font_index])
+        continue;
+      int pixel_index, x, y = 0;
+      switch (rotate_led) {
+      case Ninety:
+        x = DIGIT_FONT_WIDTH - 1 - col;
+        y = DIGIT_FONT_HEIGHT - 1 - row;
+        pixel_index = (base_y + y) * GRID_WIDTH + (base_x + x + 1);
+        break;
+      case None:
+        pixel_index = (base_y + row) * GRID_WIDTH + (base_x + col);
+        break;
+      }
+      if (pixel_index >= 0 && pixel_index < NUM_PIXEL) {
+        pixels[pixel_index] = color;
       }
     }
   }
@@ -178,11 +205,13 @@ static inline void put_letter_in_pixel_buff(const LETTER_FONT font, int base_x,
 static inline void put_char_in_pixel_buff(char c, int base_x, int base_y,
                                           uint32_t color) {
   if (c >= '0' && c <= '9') {
-    put_digit_in_pixel_buff(DIGIT_FONTS[c - '0'], base_x, base_y, color);
+    put_digit_in_pixel_buff(DIGIT_FONTS[c - '0'], base_x, base_y, color, None);
   } else if (c >= 'A' && c <= 'Z') {
-    put_letter_in_pixel_buff(LETTER_FONTS[c - 'A'], base_x, base_y, color);
+    put_letter_in_pixel_buff(LETTER_FONTS[c - 'A'], base_x, base_y, color,
+                             Ninety);
   } else if (c >= 'a' && c <= 'z') {
-    put_letter_in_pixel_buff(LETTER_FONTS[c - 'a'], base_x, base_y, color);
+    put_letter_in_pixel_buff(LETTER_FONTS[c - 'a'], base_x, base_y, color,
+                             Ninety);
   }
 }
 
@@ -216,7 +245,7 @@ int main() {
                              rgba_u32(50, 100, 150, 10));
 
       show_pixel(pio, sm);
-      sleep_ms(1000);
+      sleep_ms(100);
       clear_buff();
     }
 
