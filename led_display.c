@@ -1,21 +1,20 @@
+#include "hardware/pio.h"
+#include "pico/cyw43_arch.h"
+#include "sys/_intsup.h"
+#include "ws2812.pio.h"
 #include <ctype.h>
 #include <hardware/gpio.h>
 #include <pico/assert.h>
+#include <pico/stdio.h>
 #include <pico/time.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-
-#include "hardware/clocks.h"
-#include "hardware/pio.h"
-#include "pico/cyw43_arch.h"
-#include "pico/stdlib.h"
-#include "ws2812.pio.h"
+#include <time.h>
 
 #define GRID_WIDTH 8
-#define GRID_HEIGHT 8
+#define GRID_HEIGHT 16
 #define PANEL_COUNT 1
 #define NUM_PIXEL ((GRID_WIDTH * GRID_HEIGHT) * PANEL_COUNT)
 #define LED_PIN 2
@@ -52,6 +51,9 @@ static inline void put_pixel_buff(int index, uint32_t color) {
 
 static inline void clear_buff() {
   memset(&pixels, 0, sizeof(uint32_t) * NUM_PIXEL);
+}
+static inline void clear_buff_led_len(int l) {
+  memset(&pixels, 0, sizeof(uint32_t) * l);
 }
 
 static inline void show_pixel(PIO pio, uint sm) {
@@ -171,6 +173,32 @@ static const LETTER_FONT LETTER_FONTS[26] = {
 
 enum Rotation { None, Ninety, OneEighty, TwoSeventy };
 
+static inline void calculate_rotation(const enum Rotation rotate_led,
+                                      bool is_digit, const int row,
+                                      const int col, int *x, int *y) {
+  const int h = (is_digit) ? DIGIT_FONT_HEIGHT : LETTER_FONT_HEIGHT;
+  const int w = (is_digit) ? DIGIT_FONT_WIDTH : LETTER_FONT_WIDTH;
+
+  switch (rotate_led) {
+  case Ninety:
+    *x = h - 1 - row;
+    *y = col;
+    break;
+  case OneEighty:
+    *x = (w - 1 - col) + 1;
+    *y = h - 1 - row;
+    break;
+  case TwoSeventy:
+    *x = row;
+    *y = h - 1 - col;
+    break;
+  case None:
+    *y = row;
+    *x = col;
+    break;
+  }
+}
+
 static inline void put_digit_in_pixel_buff(const DIGIT_FONT font, int base_x,
                                            int base_y, uint32_t color,
                                            enum Rotation rotate_led) {
@@ -183,24 +211,7 @@ static inline void put_digit_in_pixel_buff(const DIGIT_FONT font, int base_x,
       int font_index = row * DIGIT_FONT_WIDTH + col;
       if (!font[font_index])
         continue;
-      switch (rotate_led) {
-      case Ninety:
-        x = DIGIT_FONT_HEIGHT - 1 - row;
-        y = col;
-        break;
-      case OneEighty:
-        x = DIGIT_FONT_WIDTH - 1 - col;
-        y = DIGIT_FONT_HEIGHT - 1 - row;
-        break;
-      case TwoSeventy:
-        x = row;
-        y = DIGIT_FONT_HEIGHT - 1 - col;
-        break;
-      case None:
-        y = row;
-        x = col;
-        break;
-      }
+      calculate_rotation(rotate_led, true, row, col, &x, &y);
       pixel_index = (base_y + y) * GRID_WIDTH + (base_x + x);
       if (pixel_index >= 0 && pixel_index < NUM_PIXEL) {
         pixels[pixel_index] = color;
@@ -218,24 +229,7 @@ static inline void put_letter_in_pixel_buff(const LETTER_FONT font, int base_x,
       int font_index = row * LETTER_FONT_WIDTH + col;
       if (!font[font_index])
         continue;
-      switch (rotate_led) {
-      case Ninety:
-        x = DIGIT_FONT_HEIGHT - 1 - row;
-        y = col;
-        break;
-      case OneEighty:
-        x = DIGIT_FONT_WIDTH - 1 - col;
-        y = DIGIT_FONT_HEIGHT - 1 - row;
-        break;
-      case TwoSeventy:
-        x = row;
-        y = DIGIT_FONT_HEIGHT - 1 - col;
-        break;
-      case None:
-        y = row;
-        x = col;
-        break;
-      }
+      calculate_rotation(rotate_led, false, row, col, &x, &y);
       pixel_index = (base_y + y) * GRID_WIDTH + (base_x + x);
       if (pixel_index >= 0 && pixel_index < NUM_PIXEL) {
         pixels[pixel_index] = color;
@@ -247,11 +241,20 @@ static inline void put_letter_in_pixel_buff(const LETTER_FONT font, int base_x,
 static inline void put_char_in_pixel_buff(char c, int base_x, int base_y,
                                           uint32_t color) {
   if (c >= '0' && c <= '9') {
-    put_digit_in_pixel_buff(DIGIT_FONTS[c - '0'], base_x, base_y, color, None);
+    put_digit_in_pixel_buff(DIGIT_FONTS[c - '0'], base_x, base_y, color, 3);
   } else if (isalpha(c)) {
     int idx = toupper(c) - 'A';
-    put_letter_in_pixel_buff(LETTER_FONTS[idx], base_x, base_y, color, None);
+    put_letter_in_pixel_buff(LETTER_FONTS[idx], base_x, base_y, color, 3);
   }
+}
+/// This is a
+static inline void put_color_at_xy(uint32_t color, int x, int y) {
+  if (x < 1 || x > 16 || y < 1 || y > 8) {
+    return; // Invalid coordinates
+  }
+  // 17 to flip the x 16..1 --> 1..16
+  int index = ((17 - x) - 1) * 8 + y;
+  pixels[index - 1] = color;
 }
 
 int main() {
@@ -276,27 +279,64 @@ int main() {
   ws2812_program_init(pio, sm, offset, LED_PIN, 800000, false);
 
   while (true) {
-    for (int i = 60; i > 0; i--) {
+    clear_buff();
+    sleep_ms(100);
+    put_color_at_xy((uint32_t)rgba_u32(50, 50, 50, 10), 16, 1);
+    // pixels[127] = rgba_u32(50, 50, 50, 10);
+    show_pixel(pio, sm);
+    // sleep_ms(100);
+    // pixels[1] = rgba_u32(50, 50, 50, 10);
+    // show_pixel(pio, sm);
+    // sleep_ms(100);
+    // pixels[2] = rgba_u32(50, 50, 50, 10);
+    show_pixel(pio, sm);
+    sleep_ms(100);
 
-      put_char_in_pixel_buff(num_to_char(i / 10), 0, 0,
+    if (0 == 0)
+      continue;
+    int a = 0;
+    for (int i = 0; i < 16; i++) {
+      pixels[a] = (uint32_t)rgba_u32(50, 50, 50, 10);
+      show_pixel(pio, sm);
+      sleep_ms(100);
+      pixels[a + 1] = (uint32_t)rgba_u32(50, 50, 50, 10);
+      show_pixel(pio, sm);
+      sleep_ms(100);
+      a += 8;
+    }
+    clear_buff();
+    if (0 == 0)
+      continue;
+    for (int a = 0; a < 60; a++) {
+      put_char_in_pixel_buff(num_to_char(a / 10), 0, 10,
                              rgba_u32(50, 100, 150, 10));
-      put_char_in_pixel_buff(num_to_char(i % 10), 4, 1,
+      put_char_in_pixel_buff(num_to_char(a % 10), 1, 6,
                              rgba_u32(50, 100, 150, 10));
 
       show_pixel(pio, sm);
-      sleep_ms(1000);
+      for (int i = 60; i > 0; i--) {
+        put_char_in_pixel_buff(num_to_char(i / 10), 0, 2,
+                               rgba_u32(50, 100, 150, 10));
+        put_char_in_pixel_buff(num_to_char(i % 10), 1, -2,
+                               rgba_u32(50, 100, 150, 10));
+
+        show_pixel(pio, sm);
+        sleep_ms(100);
+        clear_buff_led_len(64);
+      }
       clear_buff();
     }
-
-    for (int i = 0; i < 26; i++) {
-      put_char_in_pixel_buff(i + 'a', 0, 0, rgba_u32(50, 100, 150, 10));
-      show_pixel(pio, sm);
-      sleep_ms(1000);
-      clear_buff();
-    }
-
-    // put_letter_in_pixel_buff(LETTER_FONTS['l' - 97], 0, 0,
+    //
+    // for (int i = 0; i < 26; i++) {
+    //   put_char_in_pixel_buff(i + 'a', 2, i % (16 - 5),
     //                          rgba_u32(50, 100, 150, 10));
+    //   show_pixel(pio, sm);
+    //   sleep_ms(1000);
+    //   clear_buff();
+    // }
+
+    // put_letter_in_pixel_buff(LETTER_FONTS['a' - 97], 2, 5,
+    //                          rgba_u32(50, 100, 150, 10), TwoSeventy);
     // show_pixel(pio, sm);
     // sleep_ms(500);
     // clear_buff();
