@@ -293,16 +293,16 @@ int main() {
   Square sqr = {
       .x = 1,
       .y = 1,
-      .s = 1,
+      .s = 2,
       .color = rgba_u32(50, 50, 50, 10),
   };
 
   while (true) {
     draw_square(&sqr);
-    if (sqr.y >= 8 || sqr.y + sqr_dy < 1) {
+    if ((sqr.y + sqr.s) > 8 || (sqr.y) + sqr_dy < 1) {
       sqr_dy *= -1;
     }
-    if (sqr.x >= 16 || sqr.x + sqr_dx < 1) {
+    if ((sqr.x + sqr.s) > 16 || (sqr.x) + sqr_dx < 1) {
       sqr_dx *= -1;
     }
     sqr.y += sqr_dy;
