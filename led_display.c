@@ -1,6 +1,5 @@
 #include "hardware/pio.h"
 #include "pico/cyw43_arch.h"
-#include "sys/_intsup.h"
 #include "ws2812.pio.h"
 #include <ctype.h>
 #include <hardware/gpio.h>
@@ -11,7 +10,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <time.h>
 
 #define GRID_WIDTH 8
 #define GRID_HEIGHT 16
@@ -257,6 +255,19 @@ static inline void put_color_at_xy(uint32_t color, int x, int y) {
   pixels[index - 1] = color;
 }
 
+typedef struct {
+  int x, y, s;
+  uint32_t color;
+} Square;
+
+static inline void draw_square(const Square *square) {
+  for (int y = 0; y < square->s; y++) {
+    for (int x = 0; x < square->s; x++) {
+      put_color_at_xy(square->color, square->x + x, square->y + y);
+    }
+  }
+}
+
 int main() {
   stdio_init_all();
   printf("Starting, ws2812 with %d LEDs using pin %d\n", NUM_PIXEL, LED_PIN);
@@ -277,70 +288,91 @@ int main() {
   hard_assert(success);
 
   ws2812_program_init(pio, sm, offset, LED_PIN, 800000, false);
+  int sqr_dx = 1;
+  int sqr_dy = 1;
+  Square sqr = {
+      .x = 1,
+      .y = 1,
+      .s = 1,
+      .color = rgba_u32(50, 50, 50, 10),
+  };
 
   while (true) {
-    clear_buff();
-    sleep_ms(100);
-    put_color_at_xy((uint32_t)rgba_u32(50, 50, 50, 10), 16, 1);
-    // pixels[127] = rgba_u32(50, 50, 50, 10);
-    show_pixel(pio, sm);
-    // sleep_ms(100);
-    // pixels[1] = rgba_u32(50, 50, 50, 10);
-    // show_pixel(pio, sm);
-    // sleep_ms(100);
-    // pixels[2] = rgba_u32(50, 50, 50, 10);
-    show_pixel(pio, sm);
-    sleep_ms(100);
-
-    if (0 == 0)
-      continue;
-    int a = 0;
-    for (int i = 0; i < 16; i++) {
-      pixels[a] = (uint32_t)rgba_u32(50, 50, 50, 10);
-      show_pixel(pio, sm);
-      sleep_ms(100);
-      pixels[a + 1] = (uint32_t)rgba_u32(50, 50, 50, 10);
-      show_pixel(pio, sm);
-      sleep_ms(100);
-      a += 8;
+    draw_square(&sqr);
+    if (sqr.y >= 8 || sqr.y + sqr_dy < 1) {
+      sqr_dy *= -1;
     }
-    clear_buff();
-    if (0 == 0)
-      continue;
-    for (int a = 0; a < 60; a++) {
-      put_char_in_pixel_buff(num_to_char(a / 10), 0, 10,
-                             rgba_u32(50, 100, 150, 10));
-      put_char_in_pixel_buff(num_to_char(a % 10), 1, 6,
-                             rgba_u32(50, 100, 150, 10));
-
-      show_pixel(pio, sm);
-      for (int i = 60; i > 0; i--) {
-        put_char_in_pixel_buff(num_to_char(i / 10), 0, 2,
-                               rgba_u32(50, 100, 150, 10));
-        put_char_in_pixel_buff(num_to_char(i % 10), 1, -2,
-                               rgba_u32(50, 100, 150, 10));
-
-        show_pixel(pio, sm);
-        sleep_ms(100);
-        clear_buff_led_len(64);
-      }
-      clear_buff();
+    if (sqr.x >= 16 || sqr.x + sqr_dx < 1) {
+      sqr_dx *= -1;
     }
-    //
-    // for (int i = 0; i < 26; i++) {
-    //   put_char_in_pixel_buff(i + 'a', 2, i % (16 - 5),
-    //                          rgba_u32(50, 100, 150, 10));
-    //   show_pixel(pio, sm);
-    //   sleep_ms(1000);
-    //   clear_buff();
-    // }
-
-    // put_letter_in_pixel_buff(LETTER_FONTS['a' - 97], 2, 5,
-    //                          rgba_u32(50, 100, 150, 10), TwoSeventy);
-    // show_pixel(pio, sm);
-    // sleep_ms(500);
-    // clear_buff();
+    sqr.y += sqr_dy;
+    sqr.x += sqr_dx;
+    show_pixel(pio, sm);
+    clear_buff();
+    sleep_ms(400);
   }
 
   pio_remove_program_and_unclaim_sm(&ws2812_program, pio, sm, offset);
 }
+
+// clear_buff();
+// sleep_ms(100);
+// put_color_at_xy((uint32_t)rgba_u32(50, 50, 50, 10), 16, 1);
+// // pixels[127] = rgba_u32(50, 50, 50, 10);
+// show_pixel(pio, sm);
+// // sleep_ms(100);
+// // pixels[1] = rgba_u32(50, 50, 50, 10);
+// // show_pixel(pio, sm);
+// // sleep_ms(100);
+// // pixels[2] = rgba_u32(50, 50, 50, 10);
+// show_pixel(pio, sm);
+// sleep_ms(100);
+//
+// if (0 == 0)
+//   continue;
+// int a = 0;
+// for (int i = 0; i < 16; i++) {
+//   pixels[a] = (uint32_t)rgba_u32(50, 50, 50, 10);
+//   show_pixel(pio, sm);
+//   sleep_ms(100);
+//   pixels[a + 1] = (uint32_t)rgba_u32(50, 50, 50, 10);
+//   show_pixel(pio, sm);
+//   sleep_ms(100);
+//   a += 8;
+// }
+// clear_buff();
+// if (0 == 0)
+//   continue;
+// for (int a = 0; a < 60; a++) {
+//   put_char_in_pixel_buff(num_to_char(a / 10), 0, 10,
+//                          rgba_u32(50, 100, 150, 10));
+//   put_char_in_pixel_buff(num_to_char(a % 10), 1, 6,
+//                          rgba_u32(50, 100, 150, 10));
+//
+//   show_pixel(pio, sm);
+//   for (int i = 60; i > 0; i--) {
+//     put_char_in_pixel_buff(num_to_char(i / 10), 0, 2,
+//                            rgba_u32(50, 100, 150, 10));
+//     put_char_in_pixel_buff(num_to_char(i % 10), 1, -2,
+//                            rgba_u32(50, 100, 150, 10));
+//
+//     show_pixel(pio, sm);
+//     sleep_ms(100);
+//     clear_buff_led_len(64);
+//   }
+//   clear_buff();
+// }
+// //
+// // for (int i = 0; i < 26; i++) {
+// //   put_char_in_pixel_buff(i + 'a', 2, i % (16 - 5),
+// //                          rgba_u32(50, 100, 150, 10));
+// //   show_pixel(pio, sm);
+// //   sleep_ms(1000);
+// //   clear_buff();
+// // }
+//
+// // put_letter_in_pixel_buff(LETTER_FONTS['a' - 97], 2, 5,
+// //                          rgba_u32(50, 100, 150, 10), TwoSeventy);
+// // show_pixel(pio, sm);
+// // sleep_ms(500);
+// // clear_buff();
