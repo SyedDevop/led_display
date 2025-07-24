@@ -17,6 +17,10 @@
 #define NUM_PIXEL ((GRID_WIDTH * GRID_HEIGHT) * PANEL_COUNT)
 #define LED_PIN 2
 #define num_to_char(num) (num + 48)
+#define SCREEN_FPS 60
+#define DELTA_TIME_SEC (1.0f / SCREEN_FPS)
+#define DELTA_TIME_MS (1000 / SCREEN_FPS)    // 16 ms (integer division)
+#define DELTA_TIME_US (1000000 / SCREEN_FPS) // 16666 µs (integer division)
 
 static inline void put_pixel(PIO pio, uint sm, uint32_t pixel_grb) {
   pio_sm_put_blocking(pio, sm, pixel_grb << 8);
@@ -293,11 +297,14 @@ int main() {
   Square sqr = {
       .x = 1,
       .y = 1,
-      .s = 2,
+      .s = 1,
       .color = rgba_u32(50, 50, 50, 10),
   };
 
+  uint32_t last_time = time_us_32();
   while (true) {
+    uint32_t current_time = time_us_32();
+    uint32_t delta_time = current_time - last_time;
     draw_square(&sqr);
     if ((sqr.y + sqr.s) > 8 || (sqr.y) + sqr_dy < 1) {
       sqr_dy *= -1;
@@ -305,11 +312,19 @@ int main() {
     if ((sqr.x + sqr.s) > 16 || (sqr.x) + sqr_dx < 1) {
       sqr_dx *= -1;
     }
-    sqr.y += sqr_dy;
-    sqr.x += sqr_dx;
+
+    float time_factor = (float)delta_time / DELTA_TIME_US;
+    sqr.y += sqr_dy * time_factor;
+    sqr.x += sqr_dx * time_factor;
     show_pixel(pio, sm);
     clear_buff();
-    sleep_ms(400);
+
+    uint32_t frame_time = time_us_32() - current_time;
+    if (frame_time < DELTA_TIME_US) {
+      sleep_us(DELTA_TIME_US - frame_time);
+    }
+
+    last_time = current_time;
   }
 
   pio_remove_program_and_unclaim_sm(&ws2812_program, pio, sm, offset);
